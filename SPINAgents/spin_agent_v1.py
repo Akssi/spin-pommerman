@@ -26,16 +26,18 @@ class DQN(nn.Module):
     def __init__(self, dueling=True):
         super().__init__()
         self.dueling = dueling
-        self.conv1 = nn.Conv1d(3,1,1)
-        self.fc1 = nn.Linear(169, 512)
+        self.conv1 = nn.Conv2d(3,1,2, padding=1)
+        #self.fc1 = nn.Linear(169, 512)
+        self.fc1 = nn.Linear(144, 512)
         self.fc2 = nn.Linear(512, 512)
         self.fc3 = nn.Linear(512, 6)
         if dueling:
             self.v = nn.Linear(512, 1)
     
     def forward(self, x):
+        
         x = F.relu(self.conv1(x))
-        x = x.reshape(x.shape[0],x.shape[2])
+        x = x.reshape(x.shape[0], x.shape[2]*x.shape[3])
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         if self.dueling:
@@ -61,9 +63,9 @@ class SPIN_1(agents.BaseAgent):
     def __init__(self, *args, **kwargs):#gamma=0.8, batch_size=128):
         super(SPIN_1, self).__init__(*args, **kwargs)
         self.target_Q = DQN()
-        self.target_Q.cuda()
+        #self.target_Q.cuda()
         self.Q = DQN()
-        self.Q.cuda()
+        #self.Q.cuda()
         self.gamma = 0.8
         self.batch_size = 128
         self.epsilon = 0.1
@@ -72,11 +74,12 @@ class SPIN_1(agents.BaseAgent):
     
     def prepInput(self, obs):
         # Add board to input
-        board = np.array(list(obs['board'].copy())).flatten()
-        networkInput = board.reshape(board.size, 1)
+        board = np.array(list(obs['board'].copy()))
+        networkInput = np.reshape(board, (1, board.shape[0], board.shape[1]))
+
         # Add bomb strength map
-        bomb_blast_map = np.array(list(obs['bomb_blast_strength'].copy())).flatten()
-        networkInput = np.append(networkInput, bomb_blast_map.reshape(bomb_blast_map.size, 1), axis=1)
+        bomb_blast_map = np.array(list(obs['bomb_blast_strength'].copy()))
+        networkInput = np.append(networkInput, bomb_blast_map.reshape(1, bomb_blast_map.shape[0], bomb_blast_map.shape[1]), axis=0)
         # Add position as a board map with '1' to denote player position
         positionBoard = obs['board'].copy()
         for i in range(len(obs['board'])):
@@ -85,41 +88,40 @@ class SPIN_1(agents.BaseAgent):
                     positionBoard[i][j] = 1
                 else:
                     positionBoard[i][j] = 0
-        positionBoard = np.array(list(positionBoard)).flatten()
-        networkInput = np.append(networkInput, positionBoard.reshape(positionBoard.size, 1), axis=1)
+        positionBoard = np.array(list(positionBoard))
+        networkInput = np.append(networkInput, positionBoard.reshape(1, positionBoard.shape[0], positionBoard.shape[1]), axis=0)
         # Prep input for convolution
-        networkInput = np.transpose(networkInput)
-        networkInput = np.reshape(networkInput, (1, networkInput.shape[0], networkInput.shape[1]))
-
+        networkInput = networkInput.reshape(1, networkInput.shape[0], networkInput.shape[1], networkInput.shape[2])
+        
         return networkInput
 
     def act(self, obs, action_space):#self, x, epsilon=0.1):
         self.Input = Variable(torch.from_numpy(self.prepInput(obs)).type(torch.FloatTensor))
-        x = self.Input.cuda()
+        x = self.Input
         p = random.uniform(0, 1)
+
+        # Return random action with probability epsilon
         if p < self.epsilon :
             action = int(np.round(random.uniform(-0.5, 5.5)))
             action = max(0, min(action, 5))
-            return Variable(torch.Tensor([action])).type(torch.LongTensor).cpu()
+            return action
+
         Q_sa = self.Q(x.data)
-        argmax = Variable(Q_sa.data.max(0)[1]) 
-        return argmax.cpu()
+        argmax = Q_sa.data.max(1)[1]
+        return argmax.data.numpy()[0]
     
     def backward(self, transitions):
         batch = Transition(*zip(*transitions))
 
-        state = Variable(torch.cat(batch.state)).cuda()
-        for i in range(len(batch.action)):
-            action = batch.action[i]
-            if action.size > 1:
-                batch.action[i] = action[0]
-        action = Variable(torch.from_numpy(np.array(batch.action))).cuda()
-        next_state = Variable(torch.cat(batch.next_state)).cuda()
-        reward = Variable(torch.cat(batch.reward)).cuda()
-        done = Variable(torch.from_numpy(np.array(batch.done))).cuda()
+        state = Variable(torch.cat(batch.state))
+        action = Variable(torch.from_numpy(np.array(batch.action)))
+        next_state = Variable(torch.cat(batch.next_state))
+        reward = Variable(torch.cat(batch.reward))
+        done = Variable(torch.from_numpy(np.array(batch.done)))
 
         Q_sa = self.Q(next_state).detach()
-        target = self.target_Q(next_state).detach() 
+        target = self.target_Q(next_state).detach()
+
         _, argmax = Q_sa.max(dim=1, keepdim=True)
         target = target.gather(1, argmax)
 

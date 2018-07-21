@@ -15,6 +15,8 @@ from collections import namedtuple
 
 import sys, getopt
 
+from tensorboardX import SummaryWriter
+
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
@@ -55,8 +57,9 @@ def load_checkpoint(agent, path):
 def main(argv):
     checkpointFilePath = ''
     alwaysRender = False
+    useCuda = True
     try:
-        opts, args = getopt.getopt(argv,"hrc:a:",["checkpoint=","agent="])
+        opts, args = getopt.getopt(argv,"hrc:a:g:",["checkpoint=","agent=", "cuda="])
     except getopt.GetoptError:
         print('Error in command arguments. Run this for help:\n\ttrain_singleAgent.py -h')
         sys.exit(2)
@@ -71,11 +74,14 @@ def main(argv):
             checkpointFilePath = arg
         elif opt in ("-a", "--agent"):
             agentName = arg
+        elif opt in ("-g","--cuda"):
+            useCuda = arg 
+   
 
     # Create a set of agents (exactly four)
     agent_list = [
         agents.SimpleAgent(),
-        agents.RandomAgent(),
+        agents.SimpleAgent(),
         agents.SimpleAgent()
     ]
     if agentName == "2":
@@ -87,13 +93,15 @@ def main(argv):
 
 
     # Make the "Team" environment using the agent list
-    # env = pommerman.make('PommeTeam-v0', agent_list)
-    env = pommerman.make('PommeTeam-v0', agent_list)
+    env = pommerman.make('PommeFFAFast-v0', agent_list)
     memory = ReplayMemory(100000)
     batch_size = 128
     epsilon = 1
     rewards = []
     start_epoch = 0
+
+    # Writer to log data to tensorboard
+    writer = SummaryWriter()
 
     if checkpointFilePath != '':
         start_epoch = load_checkpoint(agent_list[3], checkpointFilePath)
@@ -102,35 +110,42 @@ def main(argv):
     for i in range(start_epoch, 5750):
         state = env.reset()
         done = False
-        total_reward = 0
-        epsilon *= 0.99
-        while not done and agent_list[3]._character.is_alive:
+        total_reward = [0] * len(agent_list)
+        epsilon *= 0.995
+        while not done:# and agent_list[3]._character.is_alive:
             if i > 4990 or alwaysRender:
                 env.render()
             # Set epsilon for our learning agent
             agent_list[3].epsilon = max(epsilon, 0.1)
-
+            
             actions = env.act(state)
-            agentAction = actions[3]
-            actions[3] = actions[3].data.numpy()[0]
-            obs_input = Variable(torch.from_numpy(agent_list[3].prepInput(state[3])).type(torch.FloatTensor))
             next_obs, reward, done, _ = env.step(actions)
             state = next_obs
-            if not agent_list[3]._character.is_alive:
-                reward[3] = -1
+
             # Fill replay memory for our learning agent
-            memory.push(agent_list[3].Input, actions[3],
-                torch.from_numpy(agent_list[3].prepInput(state[3])).type(torch.FloatTensor), torch.Tensor([reward[3]]),
-                torch.Tensor([done]))
-            total_reward += reward[3]
+            if not agent_list[3]._character.is_alive:
+                memory.push(agent_list[3].Input, torch.LongTensor([actions[3]]),
+                    torch.from_numpy(agent_list[3].prepInput(state[3])).type(torch.FloatTensor), torch.Tensor([reward[3]]),
+                    torch.Tensor([done]))
+            total_reward = [x + y for x, y in zip(total_reward, reward)]
         rewards.append(total_reward)
+
+        # Creates a dictionary with agent name and rewards to be displayed on tensorboard
+        total_reward_list = []
+        for j in range(len(total_reward)):
+            total_reward_list.append((type(agent_list[j]).__name__+'('+str(j)+')', total_reward[j]))
+        writer.add_scalars('data/rewards', dict(total_reward_list), i)
+        writer.add_scalar('data/epsilon', agent_list[3].epsilon, i)
+        writer.add_scalar('data/memory', memory.__len__(), i)
+
         print("Episode : ", i)
-        if memory.__len__() > 10000:
-            batch = memory.sample(batch_size)
+        if memory.__len__() > 2:#memory.__len__() > 10000:
+            #batch = memory.sample(batch_size)
+            batch = memory.sample(2)
             agent_list[3].backward(batch)
         if i > 0 and i % 750 == 0:
             pd.DataFrame(rewards).rolling(50, center=False).mean().plot()
-            plt.show()
+            #plt.show()
             save_checkpoint({
                     'epoch': i + 1,
                     'arch': 0,
@@ -151,8 +166,9 @@ def main(argv):
         }, agent_list[3].__class__.__name__)
 
     pd.DataFrame(rewards).rolling(50, center=False).mean().plot()
-    plt.show()
+    #plt.show()
 
+    writer.close()
 
 if __name__ == '__main__':
     main(sys.argv[1:])

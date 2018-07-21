@@ -111,6 +111,16 @@
             "debugOptions": [
                 "RedirectOutput"
             ]
-        }
+        },
+        {
+            "name": "train_singleAgent",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_singleAgent.py",
+            "args": [
+                "--agent",
+                "1"
+            ]
+        },
     ]
 }
