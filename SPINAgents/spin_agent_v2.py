@@ -40,8 +40,6 @@ class DQN(nn.Module):
         if self.dueling:
             v = self.v(x)
             a = self.fc4(x)
-            # Why is tensor of lenght 1 ????? 
-            # a = 1x6 and v = 1x1 so q = 1x6 ?????
             q = v + a
         else:
             q = self.fc4(x)
@@ -57,12 +55,10 @@ def hard_update(target, source):
 
 class SPIN_2(agents.BaseAgent):
 
-    def __init__(self, *args, **kwargs):#gamma=0.8, batch_size=128):
+    def __init__(self, *args, **kwargs):
         super(SPIN_2, self).__init__(*args, **kwargs)
         self.target_Q = DQN()
-        #self.target_Q.cuda()
         self.Q = DQN()
-        #self.Q.cuda()
         self.gamma = 0.8
         self.batch_size = 128
         self.epsilon = 0.1
@@ -97,7 +93,7 @@ class SPIN_2(agents.BaseAgent):
 
     def act(self, obs, action_space):#self, x, epsilon=0.1):
         self.Input = Variable(torch.from_numpy(self.prepInput(obs)).type(torch.FloatTensor))
-        x = self.Input#.cuda()
+        x = self.Input
         p = random.uniform(0, 1)
         if p < self.epsilon :
             action = int(np.round(random.uniform(-0.5, 5.5)))
@@ -105,20 +101,20 @@ class SPIN_2(agents.BaseAgent):
             return Variable(torch.Tensor([action])).type(torch.LongTensor).cpu()
         Q_sa = self.Q(x.data)
         argmax = Variable(Q_sa.data.max(0)[1]) 
-        return argmax#.cpu()
+        return argmax
     
     def backward(self, transitions):
         batch = Transition(*zip(*transitions))
 
-        state = Variable(torch.cat(batch.state))#.cuda()
+        state = Variable(torch.cat(batch.state))
         for i in range(len(batch.action)):
             action = batch.action[i]
             if action.size > 1:
                 batch.action[i] = action[0]
-        action = Variable(torch.from_numpy(np.array(batch.action)))#.cuda()
-        next_state = Variable(torch.cat(batch.next_state))#.cuda()
-        reward = Variable(torch.cat(batch.reward))#.cuda()
-        done = Variable(torch.from_numpy(np.array(batch.done)))#.cuda()
+        action = Variable(torch.from_numpy(np.array(batch.action)))
+        next_state = Variable(torch.cat(batch.next_state))
+        reward = Variable(torch.cat(batch.reward))
+        done = Variable(torch.from_numpy(np.array(batch.done)))
 
         Q_sa = self.Q(next_state).detach()
         target = self.target_Q(next_state).detach() 

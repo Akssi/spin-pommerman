@@ -17,7 +17,6 @@ import sys, getopt
 
 from tensorboardX import SummaryWriter
 
-
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
 
@@ -57,9 +56,8 @@ def load_checkpoint(agent, path):
 def main(argv):
     checkpointFilePath = ''
     alwaysRender = False
-    useCuda = True
     try:
-        opts, args = getopt.getopt(argv,"hrc:a:g:",["checkpoint=","agent=", "cuda="])
+        opts, args = getopt.getopt(argv,"hrc:a:",["checkpoint=","agent="])
     except getopt.GetoptError:
         print('Error in command arguments. Run this for help:\n\ttrain_singleAgent.py -h')
         sys.exit(2)
@@ -74,9 +72,6 @@ def main(argv):
             checkpointFilePath = arg
         elif opt in ("-a", "--agent"):
             agentName = arg
-        elif opt in ("-g","--cuda"):
-            useCuda = arg 
-   
 
     # Create a set of agents (exactly four)
     agent_list = [
@@ -112,7 +107,7 @@ def main(argv):
         done = False
         total_reward = [0] * len(agent_list)
         epsilon *= 0.995
-        while not done:# and agent_list[3]._character.is_alive:
+        while not done:
             if i > 4990 or alwaysRender:
                 env.render()
             # Set epsilon for our learning agent
@@ -139,13 +134,10 @@ def main(argv):
         writer.add_scalar('data/memory', memory.__len__(), i)
 
         print("Episode : ", i)
-        if memory.__len__() > 2:#memory.__len__() > 10000:
-            #batch = memory.sample(batch_size)
-            batch = memory.sample(2)
+        if memory.__len__() > 10000:
+            batch = memory.sample(batch_size)
             agent_list[3].backward(batch)
         if i > 0 and i % 750 == 0:
-            pd.DataFrame(rewards).rolling(50, center=False).mean().plot()
-            #plt.show()
             save_checkpoint({
                     'epoch': i + 1,
                     'arch': 0,
@@ -165,8 +157,7 @@ def main(argv):
             'optimizer' : agent_list[3].optimizer.state_dict(),
         }, agent_list[3].__class__.__name__)
 
-    pd.DataFrame(rewards).rolling(50, center=False).mean().plot()
-    #plt.show()
+
 
     writer.close()
 

@@ -27,7 +27,6 @@ class DQN(nn.Module):
         super().__init__()
         self.dueling = dueling
         self.conv1 = nn.Conv2d(3,1,2, padding=1)
-        #self.fc1 = nn.Linear(169, 512)
         self.fc1 = nn.Linear(144, 512)
         self.fc2 = nn.Linear(512, 512)
         self.fc3 = nn.Linear(512, 6)
@@ -35,7 +34,6 @@ class DQN(nn.Module):
             self.v = nn.Linear(512, 1)
     
     def forward(self, x):
-        
         x = F.relu(self.conv1(x))
         x = x.reshape(x.shape[0], x.shape[2]*x.shape[3])
         x = F.relu(self.fc1(x))
@@ -43,8 +41,6 @@ class DQN(nn.Module):
         if self.dueling:
             v = self.v(x)
             a = self.fc3(x)
-            # Why is tensor of lenght 1 ????? 
-            # a = 1x6 and v = 1x1 so q = 1x6 ?????
             q = v + a
         else:
             q = self.fc3(x)
@@ -63,9 +59,7 @@ class SPIN_1(agents.BaseAgent):
     def __init__(self, *args, **kwargs):#gamma=0.8, batch_size=128):
         super(SPIN_1, self).__init__(*args, **kwargs)
         self.target_Q = DQN()
-        #self.target_Q.cuda()
         self.Q = DQN()
-        #self.Q.cuda()
         self.gamma = 0.8
         self.batch_size = 128
         self.epsilon = 0.1
@@ -76,7 +70,6 @@ class SPIN_1(agents.BaseAgent):
         # Add board to input
         board = np.array(list(obs['board'].copy()))
         networkInput = np.reshape(board, (1, board.shape[0], board.shape[1]))
-
         # Add bomb strength map
         bomb_blast_map = np.array(list(obs['bomb_blast_strength'].copy()))
         networkInput = np.append(networkInput, bomb_blast_map.reshape(1, bomb_blast_map.shape[0], bomb_blast_map.shape[1]), axis=0)
