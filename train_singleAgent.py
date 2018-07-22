@@ -79,10 +79,10 @@ def main(argv):
         agents.SimpleAgent(),
         agents.SimpleAgent()
     ]
-    if agentName == "2":
-        agent_list.append(SPINAgents.SPIN_2())
-    elif agentName == "1":
+    if agentName == "1":
         agent_list.append(SPINAgents.SPIN_1())
+    elif agentName == "2":
+        agent_list.append(SPINAgents.SPIN_2())
     else:
         agent_list.append(SPINAgents.SPIN_0())
 
@@ -92,11 +92,11 @@ def main(argv):
     memory = ReplayMemory(100000)
     batch_size = 128
     epsilon = 1
-    rewards = []
     start_epoch = 0
 
     # Writer to log data to tensorboard
-    writer = SummaryWriter()
+    writer = SummaryWriter('runs')
+
 
     if checkpointFilePath != '':
         start_epoch = load_checkpoint(agent_list[3], checkpointFilePath)
@@ -106,8 +106,10 @@ def main(argv):
         state = env.reset()
         done = False
         total_reward = [0] * len(agent_list)
+        action_histo = np.zeros(6)
         epsilon *= 0.995
-        while not done:
+        alive_steps = 0
+        while not done and agent_list[3]._character.is_alive:
             if i > 4990 or alwaysRender:
                 env.render()
             # Set epsilon for our learning agent
@@ -118,20 +120,31 @@ def main(argv):
             state = next_obs
 
             # Fill replay memory for our learning agent
-            if not agent_list[3]._character.is_alive:
-                memory.push(agent_list[3].Input, torch.LongTensor([actions[3]]),
-                    torch.from_numpy(agent_list[3].prepInput(state[3])).type(torch.FloatTensor), torch.Tensor([reward[3]]),
-                    torch.Tensor([done]))
-            total_reward = [x + y for x, y in zip(total_reward, reward)]
-        rewards.append(total_reward)
+            memory.push(agent_list[3].Input, torch.LongTensor([actions[3]]),
+                torch.from_numpy(agent_list[3].prepInput(state[3])).type(torch.FloatTensor), torch.Tensor([reward[3]]),
+                torch.Tensor([done]))
 
-        # Creates a dictionary with agent name and rewards to be displayed on tensorboard
+            # Save infos about our leaning agent
+            action_histo[actions[3]] += 1
+            alive_steps += 1
+            total_reward = [x + y for x, y in zip(total_reward, reward)]
+
+        # Log infos about our leaning agent to tensorboad
+        writer.add_scalars('data/actions', {'stop':action_histo[0], 'up':action_histo[1], 'down':action_histo[2], 'left':action_histo[3], 'right':action_histo[4], 'bomb':action_histo[5]}, i)
+        writer.add_scalar('data/alive_steps', alive_steps, i)
+        writer.add_scalar('data/epsilon', agent_list[3].epsilon, i)
+        writer.add_scalar('data/memory', memory.__len__(), i)
+        
+        # Creates a dictionary with agent name and rewards to be logged on tensorboard
         total_reward_list = []
         for j in range(len(total_reward)):
             total_reward_list.append((type(agent_list[j]).__name__+'('+str(j)+')', total_reward[j]))
         writer.add_scalars('data/rewards', dict(total_reward_list), i)
-        writer.add_scalar('data/epsilon', agent_list[3].epsilon, i)
-        writer.add_scalar('data/memory', memory.__len__(), i)
+        
+        ####     Log input of learning agent as image      ####
+        #### Use if agent has a 1 x 3 x N x N input matrix #### 
+        spinInput = agent_list[3].Input
+        writer.add_image('end_img', spinInput.reshape(spinInput.shape[1], spinInput.shape[2], spinInput.shape[3]), i)
 
         print("Episode : ", i)
         if memory.__len__() > 10000:

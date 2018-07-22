@@ -26,7 +26,7 @@ class DQN(nn.Module):
     def __init__(self, dueling=True):
         super().__init__()
         self.dueling = dueling
-        self.fc1 = nn.Linear(512, 512)
+        self.fc1 = nn.Linear(368, 512)
         self.fc2 = nn.Linear(512, 512)
         self.fc3 = nn.Linear(512, 512)
         self.fc4 = nn.Linear(512, 6)
@@ -95,22 +95,21 @@ class SPIN_2(agents.BaseAgent):
         self.Input = Variable(torch.from_numpy(self.prepInput(obs)).type(torch.FloatTensor))
         x = self.Input
         p = random.uniform(0, 1)
+
+        # Return random action with probability epsilon
         if p < self.epsilon :
             action = int(np.round(random.uniform(-0.5, 5.5)))
             action = max(0, min(action, 5))
-            return Variable(torch.Tensor([action])).type(torch.LongTensor).cpu()
+            return action
+
         Q_sa = self.Q(x.data)
-        argmax = Variable(Q_sa.data.max(0)[1]) 
-        return argmax
+        argmax = Q_sa.data.max(1)[1]
+        return argmax.data.numpy()[0]
     
     def backward(self, transitions):
         batch = Transition(*zip(*transitions))
 
         state = Variable(torch.cat(batch.state))
-        for i in range(len(batch.action)):
-            action = batch.action[i]
-            if action.size > 1:
-                batch.action[i] = action[0]
         action = Variable(torch.from_numpy(np.array(batch.action)))
         next_state = Variable(torch.cat(batch.next_state))
         reward = Variable(torch.cat(batch.reward))
