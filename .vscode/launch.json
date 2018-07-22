@@ -113,7 +113,7 @@
             ]
         },
         {
-            "name": "train_singleAgent",
+            "name": "train v1",
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/train_singleAgent.py",
@@ -122,5 +122,15 @@
                 "1"
             ]
         },
+        {
+            "name": "train v2",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/train_singleAgent.py",
+            "args": [
+                "--agent",
+                "2"
+            ]
+        }
     ]
 }
