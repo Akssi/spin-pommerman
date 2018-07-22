@@ -56,22 +56,29 @@ def load_checkpoint(agent, path):
 def main(argv):
     checkpointFilePath = ''
     alwaysRender = False
+    forceRestartOnDeath = False
     try:
-        opts, args = getopt.getopt(argv,"hrc:a:",["checkpoint=","agent="])
+        opts, args = getopt.getopt(argv,"hrRc:a:",["checkpoint=","agent=","restart_on_death"])
     except getopt.GetoptError:
         print('Error in command arguments. Run this for help:\n\ttrain_singleAgent.py -h')
         sys.exit(2)
 
     for opt, arg in opts:
-        if opt == '-r':
-            alwaysRender = True
-        elif opt == '-h':
-            print('train_singleAgent.py\n-c <checkpointfile> => Resume training from a saved checkpoint\n-a(--agent) <agent version> => Version of agent to train (default=0)\n-r => Always render')
+        if opt == '-h':
+            print("train_singleAgent.py" +
+            "\n-c <checkpointfile> => Resume training from a saved checkpoint" +
+            "\n-a(--agent) <agent version> => Version of agent to train (default=0)" +
+            "\n-r => Always render" +
+            "\n-R(--restart_on_death) => Always render")
             sys.exit()
         elif opt in ("-c", "--checkpoint"):
             checkpointFilePath = arg
         elif opt in ("-a", "--agent"):
             agentName = arg
+        elif opt == '-r':
+            alwaysRender = True
+        elif opt in ("-R", "--restart_on_death"):
+            forceRestartOnDeath = True
 
     # Create a set of agents (exactly four)
     agent_list = [
@@ -93,6 +100,7 @@ def main(argv):
     batch_size = 128
     epsilon = 1
     start_epoch = 0
+    end_epoch = 5750
 
     # Writer to log data to tensorboard
     writer = SummaryWriter('runs')
@@ -102,15 +110,15 @@ def main(argv):
         start_epoch = load_checkpoint(agent_list[3], checkpointFilePath)
 
     # Run the episodes just like OpenAI Gym
-    for i in range(start_epoch, 5750):
+    for i in range(start_epoch, end_epoch):
         state = env.reset()
         done = False
         total_reward = [0] * len(agent_list)
         action_histo = np.zeros(6)
         epsilon *= 0.995
         alive_steps = 0
-        while not done and agent_list[3]._character.is_alive:
-            if i > 4990 or alwaysRender:
+        while not done and (not forceRestartOnDeath or agent_list[3]._character.is_alive):
+            if i > (end_epoch -50) or alwaysRender:
                 env.render()
             # Set epsilon for our learning agent
             agent_list[3].epsilon = max(epsilon, 0.1)
@@ -162,7 +170,7 @@ def main(argv):
     env.close()
 
     save_checkpoint({
-            'epoch': 5000 + 1,
+            'epoch': end_epoch + 1,
             'arch': 0,
             'state_dict_Q': agent_list[3].Q.state_dict(),
             'state_dict_target_Q': agent_list[3].target_Q.state_dict(),
